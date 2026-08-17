@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-: "${PORT:=8080}"
+: "${PORT:=8000}"
 
 if [ -z "$BANK_MCP_HOME_B64" ]; then
   echo "ERROR: BANK_MCP_HOME_B64 manquant (tar base64 de ~/.bank-mcp)" >&2
