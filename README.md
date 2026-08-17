@@ -5,8 +5,16 @@ expose en HTTPS avec authentification bearer, pret pour Railway + connexion MCP 
 
 ## Contenu
 - `bank-mcp` (@bank-mcp/server) : serveur MCP open source read-only (comptes, transactions, soldes)
-- `supergateway` : pont stdio -> SSE
+- `supergateway` : pont stdio -> Streamable HTTP (stateful, une session/process enfant par client)
 - `nginx` : verification du header `Authorization: Bearer $MCP_AUTH_TOKEN` (401 sinon)
+
+## Connexion client MCP (Notion, etc.)
+- URL : `https://<domaine>/mcp`
+- Transport : **Streamable HTTP** (pas SSE — l'ancien pont stdio->SSE de supergateway
+  partage un seul process enfant entre toutes les connexions et plante des qu'un client
+  ouvre une 2e connexion SSE en parallele ; le mode Streamable HTTP stateful isole
+  chaque session dans son propre process enfant)
+- Auth : `Authorization: Bearer <MCP_AUTH_TOKEN>`
 
 ## Variables d'environnement (Railway)
 | Variable | Contenu |
