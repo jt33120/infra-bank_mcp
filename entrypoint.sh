@@ -16,11 +16,23 @@ fi
 
 envsubst '${MCP_AUTH_TOKEN}' < /app/nginx.conf.template > /etc/nginx/nginx.conf
 
-npx -y supergateway \
-  --stdio "npx -y @bank-mcp/server" \
-  --port 8100 \
-  --ssePath /sse \
-  --messagePath /message \
-  --healthEndpoint /healthz &
+# stdio->SSE mode in supergateway shares one Server/child process across every
+# SSE connection: a second concurrent connection makes it throw "Already
+# connected to a transport", an uncaught exception that kills the whole
+# process (nginx then proxies to a dead upstream forever). Stateful
+# Streamable HTTP gives each session its own Server + child process, so one
+# session dying can't take the others down. Restart-loop below is defense in
+# depth in case supergateway exits for any other reason.
+while true; do
+  npx -y supergateway \
+    --stdio "npx -y @bank-mcp/server" \
+    --outputTransport streamableHttp \
+    --stateful \
+    --streamableHttpPath /mcp \
+    --port 8100 \
+    --healthEndpoint /healthz
+  echo "supergateway exited (code $?), restarting in 2s..." >&2
+  sleep 2
+done &
 
 nginx -g 'daemon off;'
