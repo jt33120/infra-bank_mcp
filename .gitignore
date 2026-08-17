@@ -1,0 +1,4 @@
+.env
+*.pem
+.bank-mcp/
+node_modules/
