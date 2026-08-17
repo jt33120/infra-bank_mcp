@@ -1,6 +1,5 @@
 #!/bin/sh
 set -e
-: "${PORT:=8000}"
 
 if [ -z "$BANK_MCP_HOME_B64" ]; then
   echo "ERROR: BANK_MCP_HOME_B64 manquant (tar base64 de ~/.bank-mcp)" >&2
@@ -15,11 +14,11 @@ if [ -z "$MCP_AUTH_TOKEN" ]; then
   exit 1
 fi
 
-envsubst '${PORT} ${MCP_AUTH_TOKEN}' < /app/nginx.conf.template > /etc/nginx/nginx.conf
+envsubst '${MCP_AUTH_TOKEN}' < /app/nginx.conf.template > /etc/nginx/nginx.conf
 
 npx -y supergateway \
   --stdio "npx -y @bank-mcp/server" \
-  --port 8000 \
+  --port 8100 \
   --ssePath /sse \
   --messagePath /message \
   --healthEndpoint /healthz &

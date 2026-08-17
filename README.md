@@ -13,13 +13,15 @@ expose en HTTPS avec authentification bearer, pret pour Railway + connexion MCP 
 |---|---|
 | `BANK_MCP_HOME_B64` | `tar czf - -C ~ .bank-mcp \| base64` (apres `npx -y @bank-mcp/server init`) |
 | `MCP_AUTH_TOKEN` | `openssl rand -hex 32` |
-| `PORT` | injecte par Railway automatiquement |
+
+nginx ecoute en dur sur le port `8080` (pas de variable `$PORT`) : c'est le seul point d'entree
+public. `supergateway` ecoute en interne sur `127.0.0.1:8100`, jamais expose directement.
 
 ## Deploiement
 1. Pousser ce dossier sur un repo GitHub PRIVE : `gh repo create bank-mcp-railway --private --push --source=.`
 2. Railway : New Project -> Deploy from GitHub -> choisir le repo
 3. Renseigner les variables ci-dessus
-4. Settings -> Networking -> Generate Domain
+4. Settings -> Networking -> Generate Domain, puis s'assurer que le domaine cible le port `8080`
 5. Tester : `curl -H "Authorization: Bearer <token>" https://<url>/healthz` -> `ok`
 
 ## Securite
