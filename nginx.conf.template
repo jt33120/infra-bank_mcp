@@ -1,8 +1,23 @@
 worker_processes 1;
 events { worker_connections 256; }
 http {
+  # Journalise les requetes sur stdout (visibles dans les logs Railway) : sans ca,
+  # nginx ecrit dans /var/log/nginx/access.log a l'interieur du conteneur et on ne
+  # voit pas ce qu'un client MCP a reellement tente (ex : decouverte OAuth).
+  access_log /dev/stdout;
+  error_log /dev/stderr warn;
+
   server {
     listen 8080;
+
+    # Ce serveur n'expose PAS de fournisseur OAuth : l'auth est un simple bearer
+    # statique. Repondre 401 sur les endpoints de decouverte OAuth laisse croire aux
+    # clients MCP (Notion, etc.) qu'un serveur d'autorisation existe derriere l'auth,
+    # et ils enchainent sur un enregistrement dynamique de client (RFC 7591) qui ne
+    # peut pas aboutir. Un 404 franc leur dit "pas d'OAuth ici" et les renvoie vers
+    # l'authentification par en-tete.
+    location ~ ^/(\.well-known/|register$|authorize$|token$) { return 404; }
+
     location / {
       if ($http_authorization != "Bearer ${MCP_AUTH_TOKEN}") { return 401; }
       proxy_pass http://127.0.0.1:8100;

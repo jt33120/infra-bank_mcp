@@ -14,7 +14,14 @@ expose en HTTPS avec authentification bearer, pret pour Railway + connexion MCP 
   partage un seul process enfant entre toutes les connexions et plante des qu'un client
   ouvre une 2e connexion SSE en parallele ; le mode Streamable HTTP stateful isole
   chaque session dans son propre process enfant)
-- Auth : `Authorization: Bearer <MCP_AUTH_TOKEN>`
+- Auth : **authentification par en-tete** (`Authorization: Bearer <MCP_AUTH_TOKEN>`), pas OAuth
+
+Dans Notion, a l'ajout d'une connexion MCP personnalisee, choisir l'option en-tete /
+cle d'API (nom `Authorization`, valeur `Bearer <MCP_AUTH_TOKEN>`). Si on laisse Notion
+tenter OAuth, il essaie un enregistrement dynamique de client (RFC 7591) : ce serveur
+n'expose aucun fournisseur OAuth, donc `/.well-known/oauth-*`, `/register`, `/authorize`
+et `/token` renvoient volontairement `404` pour que la decouverte OAuth echoue
+franchement au lieu de boucler sur un 401.
 
 ## Variables d'environnement (Railway)
 | Variable | Contenu |
@@ -31,6 +38,10 @@ public. `supergateway` ecoute en interne sur `127.0.0.1:8100`, jamais expose dir
 3. Renseigner les variables ci-dessus
 4. Settings -> Networking -> Generate Domain, puis s'assurer que le domaine cible le port `8080`
 5. Tester : `curl -H "Authorization: Bearer <token>" https://<url>/healthz` -> `ok`
+
+Les logs d'acces nginx partent sur stdout : les requetes des clients MCP sont donc
+visibles directement dans les logs Railway (utile pour distinguer un vrai echec d'auth
+d'une tentative de decouverte OAuth).
 
 ## Securite
 - JAMAIS de cle privee, config ou token dans le repo, Notion ou un chat : uniquement dans les variables Railway.
