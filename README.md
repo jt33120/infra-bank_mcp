@@ -18,10 +18,18 @@ expose en HTTPS avec authentification bearer, pret pour Railway + connexion MCP 
 
 Dans Notion, a l'ajout d'une connexion MCP personnalisee, choisir l'option en-tete /
 cle d'API (nom `Authorization`, valeur `Bearer <MCP_AUTH_TOKEN>`). Si on laisse Notion
-tenter OAuth, il essaie un enregistrement dynamique de client (RFC 7591) : ce serveur
-n'expose aucun fournisseur OAuth, donc `/.well-known/oauth-*`, `/register`, `/authorize`
-et `/token` renvoient volontairement `404` pour que la decouverte OAuth echoue
-franchement au lieu de boucler sur un 401.
+tenter OAuth, il essaie un enregistrement dynamique de client (RFC 7591) qui ne peut
+pas aboutir : ce serveur n'expose aucun fournisseur OAuth.
+
+Notion choisit sa methode de connexion tout seul, d'apres ce que le serveur annonce —
+il n'y a pas de bouton pour forcer l'en-tete. Le serveur doit donc etre sans ambiguite :
+
+- `/.well-known/*` et `/oauth/*` renvoient `404` (et non `401`) pour que la decouverte
+  OAuth echoue franchement au lieu de laisser croire a un serveur d'autorisation protege
+- les `401` portent `WWW-Authenticate: Bearer`, sans parametre `resource_metadata` :
+  c'est le signal "jeton statique a saisir" plutot que "va decouvrir un serveur OAuth"
+- les preflights CORS (`OPTIONS`) passent sans authentification, puisqu'ils ne portent
+  jamais d'en-tete `Authorization`
 
 ## Variables d'environnement (Railway)
 | Variable | Contenu |

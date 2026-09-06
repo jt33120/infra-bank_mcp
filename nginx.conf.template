@@ -11,15 +11,40 @@ http {
     listen 8080;
 
     # Ce serveur n'expose PAS de fournisseur OAuth : l'auth est un simple bearer
-    # statique. Repondre 401 sur les endpoints de decouverte OAuth laisse croire aux
-    # clients MCP (Notion, etc.) qu'un serveur d'autorisation existe derriere l'auth,
-    # et ils enchainent sur un enregistrement dynamique de client (RFC 7591) qui ne
-    # peut pas aboutir. Un 404 franc leur dit "pas d'OAuth ici" et les renvoie vers
-    # l'authentification par en-tete.
-    location ~ ^/(\.well-known/|register$|authorize$|token$) { return 404; }
+    # statique. Notion choisit tout seul sa methode de connexion d'apres ce que le
+    # serveur annonce, donc le moindre 401 sur un chemin de decouverte se lit comme
+    # "un serveur d'autorisation existe derriere cette auth" et l'enferme dans un
+    # parcours OAuth + enregistrement dynamique de client (RFC 7591) qui ne peut
+    # jamais aboutir. Notion sonde /.well-known/* (oauth-protected-resource,
+    # oauth-authorization-server, openid-configuration, mcp.json) ET /oauth/*
+    # (authorize, token, register), en GET comme en OPTIONS. Un 404 franc sur tout
+    # cet espace dit "pas d'OAuth ici" et le renvoie vers l'auth par en-tete.
+    location ~ ^/(\.well-known/|oauth/|register$|authorize$|token$) { return 404; }
 
     location / {
-      if ($http_authorization != "Bearer ${MCP_AUTH_TOKEN}") { return 401; }
+      # Un preflight CORS ne porte jamais d'en-tete Authorization : le soumettre au
+      # test d'auth ci-dessous le ferait echouer en 401 et bloquerait tout client
+      # navigateur avant meme la premiere requete MCP.
+      if ($request_method = OPTIONS) {
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Access-Control-Allow-Methods "GET, POST, DELETE, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-Id" always;
+        add_header Access-Control-Max-Age "86400" always;
+        return 204;
+      }
+
+      # WWW-Authenticate est obligatoire sur un 401 (RFC 7235) et son contenu est le
+      # signal qui departage les deux modes : "Bearer" seul = jeton statique a saisir,
+      # alors qu'un parametre resource_metadata=... declencherait la decouverte OAuth.
+      # Sans en-tete du tout, le client doit deviner — et Notion devine OAuth.
+      if ($http_authorization != "Bearer ${MCP_AUTH_TOKEN}") {
+        add_header WWW-Authenticate "Bearer" always;
+        return 401;
+      }
+
+      add_header Access-Control-Allow-Origin "*" always;
+      add_header Access-Control-Expose-Headers "Mcp-Session-Id" always;
+
       proxy_pass http://127.0.0.1:8100;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
