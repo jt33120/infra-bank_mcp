@@ -9,6 +9,8 @@ http {
 
   server {
     listen 8080;
+    # Meme plafond que supergateway (4 Mo) au lieu du 1 Mo par defaut de nginx.
+    client_max_body_size 4m;
 
     # Ce serveur n'expose PAS de fournisseur OAuth : l'auth est un simple bearer
     # statique. Notion choisit tout seul sa methode de connexion d'apres ce que le
@@ -20,6 +22,15 @@ http {
     # (authorize, token, register), en GET comme en OPTIONS. Un 404 franc sur tout
     # cet espace dit "pas d'OAuth ici" et le renvoie vers l'auth par en-tete.
     location ~ ^/(\.well-known/|oauth/|register$|authorize$|token$) { return 404; }
+
+    # Sonde de sante sans authentification (healthcheck Railway / Docker) : relayee
+    # jusqu'a supergateway, elle reflete donc l'etat reel du pont MCP. Ne renvoie
+    # que "ok", aucune donnee.
+    location = /healthz {
+      proxy_pass http://127.0.0.1:8100;
+      proxy_connect_timeout 2s;
+      proxy_read_timeout 5s;
+    }
 
     location / {
       # Un preflight CORS ne porte jamais d'en-tete Authorization : le soumettre au
@@ -47,6 +58,7 @@ http {
 
       proxy_pass http://127.0.0.1:8100;
       proxy_http_version 1.1;
+      proxy_connect_timeout 5s;
       proxy_set_header Host $host;
       proxy_set_header Connection "";
       proxy_buffering off;

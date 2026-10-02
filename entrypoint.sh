@@ -15,24 +15,41 @@ if [ -z "$MCP_AUTH_TOKEN" ]; then
 fi
 
 envsubst '${MCP_AUTH_TOKEN}' < /app/nginx.conf.template > /etc/nginx/nginx.conf
+nginx -t
 
-# stdio->SSE mode in supergateway shares one Server/child process across every
-# SSE connection: a second concurrent connection makes it throw "Already
-# connected to a transport", an uncaught exception that kills the whole
-# process (nginx then proxies to a dead upstream forever). Stateful
-# Streamable HTTP gives each session its own Server + child process, so one
-# session dying can't take the others down. Restart-loop below is defense in
-# depth in case supergateway exits for any other reason.
+# Mode Streamable HTTP SANS ETAT : chaque requete POST lance son propre process
+# bank-mcp, qui est tue des que la reponse est envoyee. Aucun process ne survit
+# entre deux requetes.
+#
+# Pourquoi pas le mode stateful (version precedente) : chaque session ouverte par
+# un client (Notion, Claude...) gardait un process bank-mcp vivant indefiniment,
+# car les clients ne ferment jamais leur session (pas de DELETE). Les process
+# s'accumulaient jusqu'a epuiser la limite de threads du conteneur, puis chaque
+# nouveau process mourait au demarrage ("pthread_create: Resource temporarily
+# unavailable", SIGABRT) => "MCP tool discovery failed" cote client, jusqu'au
+# prochain redemarrage du conteneur. Sans etat, il n'y a plus rien a accumuler,
+# et un redemarrage du conteneur n'invalide aucune session cote client.
+#
+# La boucle relance supergateway s'il s'arrete pour une raison quelconque.
 while true; do
-  npx -y supergateway \
-    --stdio "npx -y @bank-mcp/server" \
+  supergateway \
+    --stdio "bank-mcp" \
     --outputTransport streamableHttp \
-    --stateful \
     --streamableHttpPath /mcp \
     --port 8100 \
-    --healthEndpoint /healthz
-  echo "supergateway exited (code $?), restarting in 2s..." >&2
+    --healthEndpoint /healthz || true
+  echo "supergateway arrete, redemarrage dans 2s..." >&2
   sleep 2
 done &
 
-nginx -g 'daemon off;'
+# Attend que supergateway reponde avant d'ouvrir le port public, pour ne pas
+# renvoyer de 502 pendant le demarrage.
+i=0
+until curl -fsS http://127.0.0.1:8100/healthz >/dev/null 2>&1 || [ $i -ge 30 ]; do
+  i=$((i + 1))
+  sleep 1
+done
+
+# nginx est le process principal : s'il s'arrete, le conteneur s'arrete et
+# Railway le redemarre (restartPolicyType ALWAYS dans railway.json).
+exec nginx -g 'daemon off;'
